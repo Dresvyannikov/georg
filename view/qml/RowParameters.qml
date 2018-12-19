@@ -8,10 +8,15 @@ Item{
     property alias file_url: file_dialog.fileUrl
     property alias index: number.text
     signal add_row
-    signal del_row
+    signal clear_row
     id: row_param
     height: text_field_comf.height
     width: 356
+
+    function clear(){
+        text_field_arg.text = ''
+        text_field_comf.text = ''
+    }
 
     FileDialog{
         id: file_dialog
@@ -52,25 +57,25 @@ Item{
         }
         SingleButton{
             id: clear_bt
-            label: "del"
+            label: "clear"
             height: text_field_comf.height
             anchors.left: bt_add.right
             anchors.leftMargin: 20
             onClicked: {
-                row_param.del_row()
+                row_param.clear_row()
             }
         }
 
-        SingleButton{
-            id: add_bt
-            label: "add row"
-            height: text_field_comf.height
-            anchors.left: clear_bt.right
-            anchors.leftMargin: 20
-            onClicked: {
-                row_param.add_row()
-            }
-        }
+//        SingleButton{
+//            id: add_bt
+//            label: "add row"
+//            height: text_field_comf.height
+//            anchors.left: clear_bt.right
+//            anchors.leftMargin: 20
+//            onClicked: {
+//                row_param.add_row()
+//            }
+//        }
 
     }
 }

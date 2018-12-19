@@ -42,13 +42,17 @@ Item {
             arg: 'arg_4'
             comf: 'comf_4'
         }
+        ListElement{
+            arg: 'arg_4'
+            comf: 'comf_4'
+        }
     }
 
     ListView {
         id: list_view
         anchors.top: label_check.bottom
         width: parent.width
-        height: 26*4
+        height: 26*model_params.count
         highlightFollowsCurrentItem: true
         model: model_params
         delegate: RowParameters{
@@ -56,6 +60,11 @@ Item {
             arg_text: arg
             comf_text:row_s.file_url==''?comf:row_s.file_url
             index: model.index
+
+            onClear_row: {
+                console.log('clear', row_s.arg_text, row_s.comf_text)
+                row_s.clear()
+            }
         }
     }
 }

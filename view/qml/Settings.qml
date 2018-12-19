@@ -11,6 +11,14 @@ ApplicationWindow{
     height:root.height
     signal signalExit
 
+    statusBar: StatusBar{
+        RowLayout {
+                      anchors.fill: parent
+                      Label {
+                          id: status_text
+                          text: "Read Only" }
+                  }
+    }
 
     SingleButton{
         anchors {
@@ -23,34 +31,47 @@ ApplicationWindow{
         label: qsTr("Сохранить")
 
         onClicked: {
-            console.log('count tabs', tabview_settings.count)
+//            console.log('count tabs', tabview_settings.count)
 
+            status_text.text = 'Сохранение настроек...'
             // сохранение списка всех режимов
             list_data_mode.save_db()
 
-//            console.log('dict_model do', dict_model)
-//            var index;
-//            for (index=1; index < 2; index++){
-//                console.log('add')
-//                dict_model.append({index: fruitModel})
-//            }
-            console.log('dict_mode post', list_model_config.count)
-
-
             // сохраняем параметры имитаторов по вкладкам
-            var tab_index;
-            var tab;
+            var tab_index, tab;
             for (tab_index=1; tab_index < tabview_settings.count; tab_index++){
                 tab = tabview_settings.getTab(tab_index)
-                var split_v;
-                split_v = tab.children[0]
-                console.log('child1', tab.children[1])
-                if(split_v){
-                    console.log('split', split_v.__contents.length)
+                var list_view, list_view_index;
+                // пропускаем вкладки, которые не были активными
+                if (tab.item === null){
+                    continue
+                }
+                list_view = tab.item.children[1].contentItem;
+                list_view.currentIndex = 0; // после инкрементов вернуть назад, если нужно сохранить повторно
+                // перечисление SingleFileCheck из списка
+                for (list_view_index=0; list_view_index < list_view.count ; list_view_index++){
+                    var item, column, checkbox;
+                    item = list_view.currentItem;
+                    column = item.children[1]
+                    checkbox = item.children[2]
+
+                    var index_element, data, j_data;
+                    column.data[0].children[2].currentIndex = 0
+                    data = {}
+                    // перечисляем строки в одном режиме и записываем данные в data
+                    for (index_element=0; index_element < column.data[0].children[2].count; index_element++){
+                        data['arg_' + index_element] = column.data[0].children[2].currentItem.children[1].text;
+                        data['file_' + index_element] =  column.data[0].children[2].currentItem.children[2].text;
+                        column.data[0].children[2].incrementCurrentIndex() // инкремент индекса(на грфике видно как двигается скролл)
+                    }
+                    j_data = JSON.stringify(data)
+                    // передача данных в ядро
+//                  console.log('mode_name', column.data[0].text)
+                    list_data_cube.set_data_config(tab_index, column.data[0].text, j_data, checkbox.checked)
+                    list_view.incrementCurrentIndex() // инкремент индекса
                 }
             }
-            list_data_cube.save_configs(configArea.text)
-
+            status_text.text = 'Сохранено'
         }
     }
 
@@ -63,9 +84,11 @@ ApplicationWindow{
         label: qsTr("Главное окно")
 
         onClicked: {
+            status_text.text = ''
             anotherWindow.signalExit() // Вызываем сигнал
         }
     }
+
     TabView {
         id: tabview_settings
         anchors.left: parent.left
@@ -91,7 +114,6 @@ ApplicationWindow{
                         delegate: TextField{
                             text: model.text
                             onEditingFinished:{
-                                console.log(index, text)
                                 list_data_mode.change_mode(index, text)
                             }
                         }
@@ -118,43 +140,34 @@ ApplicationWindow{
             }
         }
 
-
-
         Repeater{
             model: list_data_cube
             delegate: Tab{
                 id: service_tab
                 title: model.label
 
-                SplitView{
-
-                    anchors.fill: parent
-                    orientation: Qt.Horizontal
-                    Item{
-//                        width: parent.width / 3
-                        width: 145
-                        TextArea{
-                            readOnly: true
-                            id: configArea
-                            anchors.left: parent.left
-                            anchors.top: parent.top
-                            anchors.bottom: parent.bottom
-                            anchors.bottomMargin: 40
-                            width: parent.width
-                            text: model.config
-                        }
-                    }
-
                     Item{
                         id: item_right
-                        width: parent.width / 2
                         height: parent.height
 
+                        SingleButton{
+                            id: button_conf
+                            label: qsTr("config")
 
+                            onClicked: {
+                                var component = Qt.createComponent('Config.qml')
+                                var window = component.createObject(root)
+                                window.closing.connect(function(){window.close.accepted = false})
+                                window.show()
+                                window.change_config(tabview_settings.currentIndex)
+//                            config_window.show()
+//                            config_window.change_config(tabview_settings.currentIndex)
+                            }
+                        }
 
                         ScrollView{
                             id: scrollViewTab
-                            anchors.top: parent.top
+                            anchors.top: button_conf.bottom
                             anchors.bottom: parent.bottom
                             anchors.left: parent.left
                             anchors.right: parent.right
@@ -197,7 +210,7 @@ ApplicationWindow{
 
                                 delegate:
                                     Item{
-                                    height: 26*4
+                                    height: column_files.height
                                     width: parent.width
                                     id: component_list
 
@@ -227,20 +240,28 @@ ApplicationWindow{
                                     Column{
                                         id: column_files
                                         width: parent.width
-
+                                        height: solo_rows.height
                                         spacing: 2
 
                                         SingleFileCheck{
+                                            id: solo_rows
                                             text: text_component.text
                                             model: list_model_files
                                             index_tab: tabview_settings.currentIndex
                                         }
                                     }
+
+                                    CheckBox{
+                                        id: block_mode
+                                        text: qsTr('Активный режим')
+                                        anchors.left: text_component.right
+                                        anchors.leftMargin: 10
+                                        checked: list_data_cube.get_block_mode(model.text, tabview_settings.currentIndex) // ? true: false
+                                    }
                                 }
                             }
                         }
                     }
-                }
             }
         }
 
@@ -249,11 +270,11 @@ ApplicationWindow{
             tab: Rectangle {
                 color: styleData.selected ? "steelblue" :"lightsteelblue"
                 border.color:  "steelblue"
-                implicitWidth: Math.max(text.width + 4, 80)
+                implicitWidth: Math.max(text_id.width + 4, 80)
                 implicitHeight: 20
                 radius: 2
                 Text {
-                    id: text
+                    id: text_id
                     anchors.centerIn: parent
                     text: styleData.title
                     color: styleData.selected ? "white" : "black"
@@ -262,5 +283,11 @@ ApplicationWindow{
             //                  frame: Rectangle { color: "steelblue" }
         }
 
+    }
+
+    Config{
+        id:config_window
+        title: qsTr("Config")
+        color: root.color
     }
 }

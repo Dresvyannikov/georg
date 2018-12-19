@@ -4,7 +4,7 @@ import QtQuick.Controls 1.4
 import QtQuick.Dialogs 1.0
 import QtQuick.Controls.Styles 1.4
 import QtQuick.Layouts 1.0
-import "qml"
+import 'qml'
 
 
 ApplicationWindow {
@@ -13,19 +13,19 @@ ApplicationWindow {
     width: 640
     height: 480
     title: main_window.name
-    color: "#5e0f0f"
 
-    statusBar: StatusBar {
-              RowLayout {
-                  anchors.fill: parent
-                  Label { text: "Read Only" }
-              }
-          }
+//    statusBar: StatusBar {
+//              RowLayout {
+//                  anchors.fill: parent
+//                  Label { text: "Read Only" }
+//              }
+//          }
 
     Rectangle {
         id: rectangle
         height: 65
         color: "#555753"
+        visible: true
         anchors.right: parent.right
         anchors.rightMargin: 6
         anchors.left: parent.left

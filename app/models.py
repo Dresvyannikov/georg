@@ -12,9 +12,14 @@ from base.models import Mode
 from base.models import Service
 from base.models import Command
 from base.models import Operator
+from base.models import DefaultConfig
+from base.models import Verbose
+from base.models import File
 
 import configparser
 import os
+import simplejson
+import re
 
 # цвета фона вкладки
 OFFLINE_COLOR = QColor("gray")
@@ -202,9 +207,9 @@ class ListDataCube(QAbstractListModel):
     @pyqtSlot(int, str, result='QVariant')
     def get_data(self, index, mode_name):
 
-        pattern_row = {'arg': 'arg', 'comf': 'file'}
+        pattern_row = {'arg': '', 'comf': ''}
         service = self.session.query(Service).filter_by(id=index).first()
-        # TODO: если одинаковые имена, то?
+        # TODO: если одинаковые имена режимов, то?
         mode = self.session.query(Mode).filter_by(name=mode_name).first()
 
         if not service:
@@ -224,7 +229,6 @@ class ListDataCube(QAbstractListModel):
                 pattern = pattern_row.copy()
                 pattern['index'] = i
                 data.append(pattern)
-
         else:
             files = default_config.verbose.files
             data = []
@@ -234,7 +238,7 @@ class ListDataCube(QAbstractListModel):
                 for file in files:
                     if file.index == i:
                         pattern['index'] = i
-                        pattern['comf'] = file.path
+                        pattern['comf'] = os.path.join(file.path, file.name)
                         pattern['arg'] = file.arg
                         data.append(pattern)
                         add = True
@@ -243,8 +247,121 @@ class ListDataCube(QAbstractListModel):
                     data.append(pattern)
         return data
 
-    def set_data_config(self, index_tab, mode_name, data):
-        print(index_tab, mode_name, data)
+    @pyqtSlot(int, str, str, bool)
+    def set_data_config(self, index_tab, mode_name, data, active):
+        #print('index_tab', index_tab, 'mode_name', mode_name, 'data', data, 'active', active)
+        json_data = simplejson.loads(data)
+        service = self.session.query(Service).filter_by(id=index_tab).first()
+        mode = self.session.query(Mode).filter_by(name=mode_name).first()
+        configs = service.defaults
+
+        default_config = None
+        for config in configs:
+            if config.mode == mode:
+                default_config = config
+                verbose = default_config.verbose
+                break
+
+        if not default_config:
+            # первое cохранение в программе
+            major, minor, patch = self.create_verbose()
+            verbose = self.session.query(Verbose).filter_by(major=major, minor=minor, patch=patch).first()
+            default_config = DefaultConfig()
+            default_config.mode_id = mode.id
+            default_config.service_id = service.id
+            default_config.verbose_id = verbose.id
+            default_config.active = active
+        else:
+            default_config.active = active
+        self.session.add(default_config)
+        self.session.commit()
+
+        for i in range(int(len(json_data) / 2)):
+            arg = json_data.get('arg_' + str(i), None)
+
+            abs_file_path = json_data.get('file_' + str(i), None)
+            valid_path = re.compile('^file://')
+            if valid_path.findall(abs_file_path):
+                abs_file_path = abs_file_path[7:]
+
+            file_path = os.path.dirname(abs_file_path)
+            file_name = os.path.basename(abs_file_path)
+
+            file = None
+            for file_ in verbose.files:
+                if file_.index == i:
+                    file = file_
+                    break
+
+            if abs_file_path is '' or abs_file_path is None:
+                if file:
+                    file.clear()
+                continue
+
+            if not file:
+                file = File()
+                file.add(file_name, file_path)
+                file.arg = arg
+                file.verbose_id = verbose.id
+                file.index = i
+            else:
+                file.add(file_name, file_path)
+                file.arg = arg
+                file.verbose_id = verbose.id
+                file.index = i
+            self.session.add(file)
+            self.session.commit()
+
+        verbose.generate_hash()
+        self.session.add(verbose)
+        self.session.commit()
+
+    @pyqtSlot(int, result='QVariant')
+    def item_data(self, index):
+        text = self._datas[index]._config
+        data = {'config': text}
+        return data
+
+    def create_verbose(self):
+        last_verbose = self.session.query(Verbose).all()
+        verbose = Verbose()
+
+        if not last_verbose:
+            verbose.major = 1
+            verbose.minor = 0
+            verbose.patch = 0
+            self.session.add(verbose)
+            self.session.commit()
+        else:
+            verbose_db = last_verbose[-1]
+            verbose.patch = verbose_db.patch + 1
+            verbose.minor = verbose_db.minor
+            verbose.major = verbose_db.major
+
+            if verbose.patch == 100:
+                verbose.patch = 0
+                verbose.minor = verbose.minor + 1
+            if verbose.minor == 100:
+                verbose.minor = 0
+                verbose.major = verbose.major + 1
+
+            self.session.add(verbose)
+            self.session.commit()
+
+        return verbose.major, verbose.minor, verbose.patch
+
+    @pyqtSlot(str, int, result='QVariant')
+    def get_block_mode(self, mode_name, service_index):
+        if service_index == 0:
+            return False
+        service = self.session.query(Service).filter_by(id=service_index).first()
+        # FIXME если два одинаковых названия
+        mode = self.session.query(Mode).filter_by(name=mode_name).first()
+        if service and mode:
+            defaults = self.session.query(DefaultConfig).filter_by(mode_id=mode.id, service_id=service.id).first()
+            if defaults:
+                return defaults.active
+            return True
 
 
 class MainWindow(QObject):

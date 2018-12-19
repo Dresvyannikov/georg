@@ -1,6 +1,7 @@
 from sqlalchemy import Column
 from sqlalchemy import Integer
 from sqlalchemy import String
+from sqlalchemy import Boolean
 from sqlalchemy import DATETIME
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -24,11 +25,11 @@ operator_in_work = Table('operator_in_work', Base.metadata,
 class Service(Base):
     __tablename__ = 'service'
     id = Column(Integer, primary_key=True)
-    ip = Column(String)
-    name = Column(String)
-    dir_name = Column(String)
-    timestamp = Column(DATETIME, default=datetime.now)
-    config = Column(String)
+    ip = Column(String, index=True)
+    name = Column(String, index=True)
+    dir_name = Column(String, index=True)
+    timestamp = Column(DATETIME, index=True, default=datetime.now)
+    config = Column(String, index=True)
 
     command_id = Column(Integer, ForeignKey('command.id'))
     state_id = Column(Integer, ForeignKey('state.id'))
@@ -63,6 +64,7 @@ class Operator(Base):
 class DefaultConfig(Base):
     __tablename__ = 'default_config'
     id = Column(Integer, primary_key=True)
+    active = Column(Boolean, index=True)
     mode_id = Column(Integer, ForeignKey('mode.id'))
     verbose_id = Column(Integer, ForeignKey('verbose.id'))
     service_id = Column(Integer, ForeignKey('service.id'))
@@ -74,8 +76,8 @@ class DefaultConfig(Base):
 class State(Base):
     __tablename__ = 'state'
     id = Column(Integer, primary_key=True)
-    name = Column(String, unique=True)
-    color = Column(String)
+    name = Column(String, index=True, unique=True)
+    color = Column(String, index=True)
     service_id = relationship('Service', backref='state')
     runner_id = relationship('Runner', backref='state')
 
@@ -168,6 +170,7 @@ class File(Base):
     size = Column(String(32), index=True)
     md5sum = Column(String(32), index=True)
     arg = Column(String(32), index=True)
+    active = Column(Boolean, index=True)
     work_id = Column(Integer, ForeignKey('work.id'))
     verbose_id = Column(Integer, ForeignKey('verbose.id'))
 
@@ -177,6 +180,14 @@ class File(Base):
         self.type = os.path.splitext(file_name)[1]
         self.size = os.path.getsize(os.path.join(path, file_name))
         self.md5sum = md5(os.path.join(path, file_name))
+
+    def clear(self):
+        self.name = ''
+        self.path = ''
+        self.type = ''
+        self.size = ''
+        self.md5sum = ''
+        self.arg = ''
 
     def __repr__(self):
         return "<File> {path} - {size}b".format(path=self.path, size=self.size)
