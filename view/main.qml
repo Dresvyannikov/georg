@@ -115,6 +115,9 @@ ApplicationWindow {
                 style: ComboBoxStyle{}
                 model: list_data_mode
                 textRole: 'text'
+                onCurrentIndexChanged: {
+                    list_data_mode.set_active_mode(currentText)
+                }
            }
 
             Label{
@@ -265,6 +268,7 @@ ApplicationWindow {
                     color_state: model.color_state
                     color_fone: model.color_fone
                     index_cube: index
+                    state_text: model.state_text
                     }
             }
         }
@@ -304,17 +308,14 @@ ApplicationWindow {
     }
 
 
-    //    Connections {
-    //        target: main_window
+        Connections {
+            target: list_data_mode
 
-    //        // обработчик сигнала sum_result описанный в конструкторе MainWindow
-    //        onSum_result: {
-    //            //sum задан через arguments=['sum']
-    //            sum_result.text = sum
-    //        }
-
-    //        onSub_result: {
-    //            sub_result.text = sub
-    //        }
-    //    }
+            // обработчик сигнала SetActiveMode описанный в конструкторе list_data_mode
+            onSetActiveMode: {
+                // фиксирует активный режим, который выбрали в предыдущем пуске.
+                //index задан через arguments=['index'] в __init__ класса
+                boxmodes.currentIndex = index
+            }
+}
 }

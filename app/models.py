@@ -1,4 +1,5 @@
 from PyQt5.QtCore import pyqtSlot, QStringListModel
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtCore import Qt
 from PyQt5.QtCore import QModelIndex
 from PyQt5.QtCore import QAbstractListModel
@@ -39,6 +40,7 @@ class DataCube(object):
         self._dir_name = dir_name
         self._ip = ip
         self._config = ''
+        self._state_text = ''
         self.files = {}
         self.rows = 0
 
@@ -85,6 +87,9 @@ class DataCube(object):
         else:
             self._color_fone = OFFLINE_COLOR
 
+    def state_text(self):
+        return self._state_text
+
 
 class ListDataCube(QAbstractListModel):
     LabelRole = Qt.UserRole + 1
@@ -92,12 +97,14 @@ class ListDataCube(QAbstractListModel):
     ColorFoneRole = Qt.UserRole + 3
     CheckedRole = Qt.UserRole + 4
     ConfigRole = Qt.UserRole + 5
+    StateText = Qt.UserRole + 6
 
     _roles = {LabelRole: b"label",
               ColorStateRole: b"color_state",
               ColorFoneRole: b"color_fone",
               CheckedRole: b"checked",
-              ConfigRole: b"config",}
+              ConfigRole: b"config",
+              StateText: b"state_text",}
     session = None
     list_data_config = {}
 
@@ -134,6 +141,9 @@ class ListDataCube(QAbstractListModel):
 
         if role == self.ConfigRole:
             return data.config()
+
+        if role == self.StateText:
+            return data.state_text()
 
         return QVariant()
 
@@ -179,6 +189,7 @@ class ListDataCube(QAbstractListModel):
                 self._datas[i]._ip = service.ip
                 self._datas[i]._color_state = service.state.color
                 self._datas[i].set_config(service.config)
+                self._datas[i]._state_text = service.state.name
 
         # сигнал окончания изменения данных
         self.endResetModel()
@@ -249,7 +260,7 @@ class ListDataCube(QAbstractListModel):
 
     @pyqtSlot(int, str, str, bool)
     def set_data_config(self, index_tab, mode_name, data, active):
-        #print('index_tab', index_tab, 'mode_name', mode_name, 'data', data, 'active', active)
+        # print('[set_data_config]', 'index_tab', index_tab, 'mode_name', mode_name, 'data', data, 'active', active)
         json_data = simplejson.loads(data)
         service = self.session.query(Service).filter_by(id=index_tab).first()
         mode = self.session.query(Mode).filter_by(name=mode_name).first()
@@ -277,9 +288,9 @@ class ListDataCube(QAbstractListModel):
         self.session.commit()
 
         for i in range(int(len(json_data) / 2)):
-            arg = json_data.get('arg_' + str(i), None)
+            arg = json_data.get('arg_' + str(i), '')
 
-            abs_file_path = json_data.get('file_' + str(i), None)
+            abs_file_path = json_data.get('file_' + str(i), '')
             valid_path = re.compile('^file://')
             if valid_path.findall(abs_file_path):
                 abs_file_path = abs_file_path[7:]
@@ -293,9 +304,18 @@ class ListDataCube(QAbstractListModel):
                     file = file_
                     break
 
-            if abs_file_path is '' or abs_file_path is None:
+            if abs_file_path is '' or not os.path.isfile(abs_file_path):
                 if file:
                     file.clear()
+                elif arg != '' or abs_file_path != '':
+                    file = File()
+                    file.arg = arg
+                    file.name = abs_file_path
+                    file.verbose_id = verbose.id
+                    file.index = i
+                    file.path = ''
+                    self.session.add(file)
+                    self.session.commit()
                 continue
 
             if not file:
@@ -312,7 +332,6 @@ class ListDataCube(QAbstractListModel):
             self.session.add(file)
             self.session.commit()
 
-        verbose.generate_hash()
         self.session.add(verbose)
         self.session.commit()
 
@@ -437,6 +456,7 @@ class MainWindow(QObject):
 class ListDataMode(QAbstractListModel):
     session = None
     text = 'text'
+    setActiveMode = pyqtSignal(int, arguments=['index'])
 
     def __init__(self, parent=None):
         QAbstractListModel.__init__(self, parent)
@@ -492,6 +512,31 @@ class ListDataMode(QAbstractListModel):
 
         self.session.add_all(new_modes)
         self.session.commit()
+
+    @pyqtSlot(str)
+    def set_active_mode(self, name):
+        if not name:
+            return
+        mode = self.session.query(Mode).filter_by(name=name).first()
+        mode.active = True
+        self.session.add(mode)
+        self.session.commit()
+
+        modes_all = self.session.query(Mode).all()
+        for _mode in modes_all:
+            if mode != _mode:
+                _mode.active = False
+                self.session.add(_mode)
+        self.session.commit()
+
+    def set_gui_setting(self):
+        # нумерация индексов с нуля у ComboBox
+        mode = self.session.query(Mode).filter_by(active=True).first()
+        if not mode:
+            index = 0
+        else:
+            index = mode.id
+        self.setActiveMode.emit(index)
 
 
 class ListDataUser(QAbstractListModel):

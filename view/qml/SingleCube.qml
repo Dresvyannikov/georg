@@ -6,6 +6,7 @@ Item{
     property alias color_state: status_rectangle.color
     property alias color_fone: fone.color
     property int index_cube: 0
+    property alias state_text: labelState.text
     width: 160
     height: 150
 
@@ -63,6 +64,13 @@ Item{
 
     Text { id: labelText; font.pixelSize: 15; anchors.centerIn: parent; text: qsTr("Test") }
 
+    Text {
+        id: labelState
+        anchors.centerIn: parent
+        text: qsTr("TextState")
+        anchors.verticalCenterOffset: 25
+    }
+
     SingleButton {
         id:console_rectangle
         x: 2
@@ -90,7 +98,7 @@ Item{
 
     Connections {
         target: update_rectangle
-        onClicked: list_data_cube.set_command(container.index_cube, qsTr("diag"))
+        onClicked: list_data_cube.set_command(container.index_cube, qsTr("update"))
     }
 
     Connections {
