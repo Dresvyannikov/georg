@@ -45,6 +45,9 @@ class Service(Base):
     def __repr__(self):
         return "<Service({name} - {ip} - {dir})>".format(name=self.name, ip=self.ip, dir=self.dir_name)
 
+    def set_state(self, state):
+        self.state_id = state.id
+
 
 class Operator(Base):
     __tablename__ = 'operator'
@@ -197,12 +200,14 @@ class Mode(Base):
     __tablename__ = 'mode'
     id = Column(Integer, primary_key=True)
     name = Column(String)
+    active = Column(Boolean,)
     # default_id = Column(Integer, ForeignKey('default_config.id'))
     works = relationship('Work', backref='mode')
     defaults = relationship('DefaultConfig', backref='mode')
 
     def __init__(self, name):
         self.name = name
+        self.active = False
 
     def __repr__(self):
         return "<Mode> {name}".format(name=self.name)
@@ -211,7 +216,6 @@ class Mode(Base):
 class Verbose(Base):
     __tablename__ = 'verbose'
     id = Column(Integer, primary_key=True)
-    hash = Column(String)
     major = Column(Integer)
     minor = Column(Integer)
     patch = Column(Integer)
@@ -220,11 +224,8 @@ class Verbose(Base):
     files = relationship('File', backref='verbose')
     services = relationship('Service', backref='verbose')
 
-    def generate_hash(self):
-        pass
-
     def __repr__(self):
-        return "<Verbose> {hash}".format(hash=self.hash)
+        return "<Verbose>"
 
 
 

@@ -16,11 +16,20 @@ from base.models import Work
 from base.models import File
 from base.models import State
 from base.models import Command
+from base.models import Verbose
+from base.models import Mode
+from base.models import DefaultConfig
 
 from sqlalchemy.orm import scoped_session
 import simplejson
 import cgi
 import os
+from shutil import copyfile
+from shutil import make_archive
+from shutil import rmtree
+
+from base import utils
+import base64
 
 Session = None
 API_VERSION = '/api/v1'
@@ -94,8 +103,91 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.end_headers()
 
             data = {'command': service.command.name}
+            if service.command.name == 'start':
+                mode = session.query(Mode).filter_by(active=True).first()
+                if not mode:
+                    data['command'] = 'not_start'
+                    self.wfile.write(simplejson.dumps(data).encode())
+                    return
+
+                default_config = session.query(DefaultConfig).filter_by(service_id=service.id).filter_by(mode_id=mode.id).first()
+                if not default_config:
+                    data['command'] = 'not_start'
+                    self.wfile.write(simplejson.dumps(data).encode())
+                    return
+                elif default_config.active:
+                    #  запись параметров запуска args, conf
+                    ARG = 'arg_{index}'
+                    COMF = 'comf_{index}'
+                    data['mode'] = mode.name
+                    rows = session.query(File).filter_by(verbose_id=default_config.verbose_id).all()
+                    for row in rows:
+                        key_arg = ARG.format(index=row.index+1)  # +1 т.к. указывают индексы в конфиге с 1
+                        data[key_arg] = row.arg
+                        key_comf = COMF.format(index=row.index+1)  # +1 т.к. в конфиге индексы с 1
+                        data[key_comf] = row.name
+
+                else:
+                    data['command'] = 'not_start'
+
             self.wfile.write(simplejson.dumps(data).encode())
             return
+
+        if '{api}/service/update'.format(api=API_VERSION) == self.path:
+            service = session.query(Service).filter_by(ip=request_ip).filter_by(
+                dir_name=self.headers.get('dir_name')).first()
+            if not service:
+                print('<server> Не нашел service по ip и dir_name: ', request_ip, self.headers.get('dir_name'))
+                self.send_response(HTTPStatus.NOT_FOUND)
+                self.end_headers()
+                return
+            service.timestamp = datetime.now()
+            session.add(service)
+            session.commit()
+
+            self.send_response(HTTPStatus.ACCEPTED)
+            self.end_headers()
+            print('service.defaults', service.defaults)
+            tmp = "/tmp"
+
+            if service.defaults:
+                dir_archiving = os.path.join(tmp, service.name)
+                if os.path.isdir(dir_archiving):
+                    rmtree(dir_archiving)
+                os.mkdir(dir_archiving)
+                for config in service.defaults:
+                    mode_path = os.path.join(dir_archiving, config.mode.name)
+                    os.mkdir(mode_path)
+                    for file in config.verbose.files:
+                        copyfile(os.path.join(file.path, file.name), os.path.join(mode_path, file.name))
+                archive_name = make_archive(service.name, "tar", root_dir=dir_archiving)
+                archive_path = os.path.abspath(archive_name)
+                md5sum = utils.md5(archive_path)
+                data_content = open(archive_path, 'rb').read()
+                encoded_content = base64.b64encode(bytes(data_content))
+                data = {'md5sum': md5sum, 'data': encoded_content, 'file_name': service.name+".tar"}
+            else:
+                data = {'file': 'not_found'}  # признак отсутствия файлов
+
+            self.wfile.write(simplejson.dumps(data).encode())
+            return
+
+        if '{api}/service/config'.format(api=API_VERSION) == self.path:
+            service = session.query(Service).filter_by(ip=request_ip).filter_by(
+                dir_name=self.headers.get('dir_name')).first()
+            if not service:
+                print('<server> Не нашел service по ip и dir_name: ', request_ip, self.headers.get('dir_name'))
+                self.send_response(HTTPStatus.NOT_FOUND)
+                self.end_headers()
+                return
+            service.timestamp = datetime.now()
+            session.add(service)
+            session.commit()
+
+            self.send_response(HTTPStatus.ACCEPTED)
+            self.end_headers()
+            data = {'config': service.config}
+            self.wfile.write(simplejson.dumps(data).encode())
 
     def get_services(self):
         global Session
@@ -149,7 +241,6 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
         return SimpleHTTPRequestHandler.do_GET(self)
 
     def create_service(self, request_ip, data, session):
-        print('create_service data', data)
         # проверка отсутсвия записи в БД
         machine_service = session.query(Service).filter_by(ip=request_ip).filter_by(
             dir_name=self.headers.get('dir_name')).all()
@@ -263,13 +354,6 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
             with open(abs_file_path, 'wb') as _file:
                 for line in content:
                     _file.write(line)
-
-            # file_db = File()
-            # file_db.add(file_name, diag_path)
-            # session.add(file_db)
-            # session.commit()
-            # diag_db.files.append(file_db)
-            # session.commit()
         self.send_response(HTTPStatus.ACCEPTED)
         self.end_headers()
 
@@ -317,7 +401,7 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
             if not state:
                 print('<PUT> Ошибка статуса')
             else:
-                # TODO: посик команды через БД, для почследующего редатирования в графике(статус - команда)
+                # TODO: посик команды через БД, для последующего редатирования в графике(статус - команда)
                 if data.get('state') == 'launched':
                     service.command = session.query(Command).filter_by(name='config').first()
 
@@ -325,25 +409,21 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
                     service.command = session.query(Command).filter_by(name='wait').first()
 
                 if data.get('state') == 'not_started':
-                    #  TODO: отправить на графику сообщение об ошибке запуска
                     print('<network> Ошибка запуска сервиса. error = ', data.get('error'))
 
                 if data.get('state') == 'stopped':
                     service.command = session.query(Command).filter_by(name='wait').first()
 
                 if data.get('state') == 'not_stopped':
-                    #  TODO: отправить на графику сообщение об ошибке запуска
                     print('<network> Ошибка остановки сервиса. error = ', data.get('error'))
 
                 if data.get('state') == 'error_work':
-                    # TODO: отправить на графику сообщение об ошибке запуска
                     print('<network> Ошибка остановки сервиса. error = ', data.get('error'))
 
                 if data.get('state') == 'ready_diag':
                     service.command = session.query(Command).filter_by(name='diag').first()
 
                 if data.get('state') == 'error_diag':
-                    # TODO: отправить на графику сообщение об ошибке в ходе сбора диагностики
                     service.command = session.query(Command).filter_by(name='wait').first()
 
                 if data.get('state') == 'sended_diag':
@@ -355,6 +435,17 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
                 if data.get('state') == 'error_config':
                     service.command = session.query(Command).filter_by(name='wait').first()
 
+                if data.get('state') == 'error_update':
+                    service.command = session.query(Command).filter_by(name='stop').first()
+
+                if data.get('state') == 'not_updated':
+                    # повторяем обновление, до error. Клиент сам решит, когда прекратить попытки обновления.
+                    service.command = session.query(Command).filter_by(name='update').first()
+
+                if data.get('state') == 'updated':
+                    service.command = session.query(Command).filter_by(name='wait').first()
+
+                service.set_state(state)
                 session.add(service)
                 session.commit()
 
@@ -568,15 +659,15 @@ class ControlStatusModel(QThread):
 
     def control_state(self):
         offline = self.session.query(State).filter_by(name='offline').first()
-        online = self.session.query(State).filter_by(name='online').first()
+        # online = self.session.query(State).filter_by(name='online').first()
         services = self.session.query(Service).all()
         for service in services:
             tdelta = datetime.now()-service.timestamp
             seconds = tdelta.total_seconds()
             if seconds > 3:
                 service.state = offline
-            else:
-                service.state = online
+            # else:
+            #     service.state = online
             self.session.add(service)
             self.change_state.emit(service)
         self.session.commit()
