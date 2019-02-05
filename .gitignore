@@ -1,0 +1,4 @@
+*.tar
+base/*.db
+base/*.png
+venv

@@ -37,7 +37,7 @@ def make_connection(signal, fun):
     signal.connect(fun)
 
 
-sql_engine = create_engine('sqlite:///' + os.path.dirname(sys.argv[0]) + '/base/app.db?check_same_thread=False',
+sql_engine = create_engine('sqlite:///' + os.path.dirname(os.path.abspath(sys.argv[0])) + '/base/app.db?check_same_thread=False',
                            echo=False)
 Base.metadata.create_all(sql_engine)
 Session = session_factory = sessionmaker(bind=sql_engine)
