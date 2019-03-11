@@ -55,10 +55,6 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.path = 'source/js/jquery.min.js'
             return SimpleHTTPRequestHandler.do_GET(self)
 
-        if 'test' in self.path:
-            self.path = 'test.html'
-            return SimpleHTTPRequestHandler.do_GET(self)
-
         if 'index' in self.path:
             self.get_services()
             return
@@ -106,12 +102,16 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
             if service.command.name == 'start':
                 mode = session.query(Mode).filter_by(active=True).first()
                 if not mode:
+                    # TODO: костыль
+                    print('Ошибка выбора активного режима')
                     data['command'] = 'not_start'
                     self.wfile.write(simplejson.dumps(data).encode())
                     return
 
                 default_config = session.query(DefaultConfig).filter_by(service_id=service.id).filter_by(mode_id=mode.id).first()
                 if not default_config:
+                    # TODO: костыль
+                    print('Ошибка выбора настроек запуска, их нет(')
                     data['command'] = 'not_start'
                     self.wfile.write(simplejson.dumps(data).encode())
                     return
@@ -126,8 +126,9 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
                         data[key_arg] = row.arg
                         key_comf = COMF.format(index=row.index+1)  # +1 т.к. в конфиге индексы с 1
                         data[key_comf] = row.name
-
                 else:
+                    # TODO: костыль
+                    print("Ошибка, нет активных конфигов")
                     data['command'] = 'not_start'
 
             self.wfile.write(simplejson.dumps(data).encode())

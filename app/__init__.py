@@ -32,6 +32,12 @@ from base.models import Command
 from base.models import Mode
 from base.models import Operator
 
+if len(sys.argv) < 2:
+    print('Укажите порт при запуске программы: run.py port')
+    exit()
+
+port = int(sys.argv[1])
+
 
 def make_connection(signal, fun):
     signal.connect(fun)
@@ -120,7 +126,7 @@ ctx.setContextProperty("list_data_user", list_data_user)
 engine.load(QUrl.fromLocalFile("view/main.qml"))
 
 handler = QuietSimpleHTTPRequestHandler
-with ThreadedHTTPServer("localhost", 8000, request_handler=handler) as main_window.server:
+with ThreadedHTTPServer("0.0.0.0", port, request_handler=handler) as main_window.server:
     # поток проверки БД на обновление
     updater = UpdaterModel()
     main_window.updater_thread = updater
