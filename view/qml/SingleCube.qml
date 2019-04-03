@@ -77,11 +77,7 @@ Item{
         y: container.height - 3 - container.height / 4
         width: container.width - 4
         height: container.height / 4
-        label: qsTr("Console")
-//        anchors.fill: container;
-//        opacity: 0.25
-//        color: buttonMouseArea.pressed ? Qt.darker(container.buttonColor, 1.5) : container.buttonColor
-
+        label: qsTr("Console_log")
     }
 
     Connections {
@@ -94,8 +90,6 @@ Item{
         onClicked: list_data_cube.set_command(container.index_cube, qsTr("start"))
     }
 
-
-
     Connections {
         target: update_rectangle
         onClicked: list_data_cube.set_command(container.index_cube, qsTr("update"))
@@ -103,6 +97,10 @@ Item{
 
     Connections {
         target: console_rectangle
-        onClicked: list_data_cube.set_command(container.index_cube, qsTr("console"))
+        onClicked:
+        {
+            logWindow.change_cube(container.index_cube)
+            logWindow.show()
+        }
     }
 }

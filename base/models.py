@@ -30,6 +30,7 @@ class Service(Base):
     dir_name = Column(String, index=True)
     timestamp = Column(DATETIME, index=True, default=datetime.now)
     config = Column(String, index=True)
+    log = Column(String, index=True)
 
     command_id = Column(Integer, ForeignKey('command.id'))
     state_id = Column(Integer, ForeignKey('state.id'))

@@ -104,15 +104,14 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
                 if not mode:
                     # TODO: костыль
                     print('Ошибка выбора активного режима')
-                    data['command'] = 'not_start'
+                    data['command'] = 'wait'
                     self.wfile.write(simplejson.dumps(data).encode())
                     return
-
                 default_config = session.query(DefaultConfig).filter_by(service_id=service.id).filter_by(mode_id=mode.id).first()
                 if not default_config:
                     # TODO: костыль
                     print('Ошибка выбора настроек запуска, их нет(')
-                    data['command'] = 'not_start'
+                    data['command'] = 'wait'
                     self.wfile.write(simplejson.dumps(data).encode())
                     return
                 elif default_config.active:
@@ -129,7 +128,7 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
                 else:
                     # TODO: костыль
                     print("Ошибка, нет активных конфигов")
-                    data['command'] = 'not_start'
+                    data['command'] = 'wait'
 
             self.wfile.write(simplejson.dumps(data).encode())
             return
@@ -411,18 +410,20 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
 
                 if data.get('state') == 'not_started':
                     print('<network> Ошибка запуска сервиса. error = ', data.get('error'))
+                    service.command = session.query(Command).filter_by(name='wait').first()
+
+                if data.get('starting') == 'not_started':
+                    service.command = session.query(Command).filter_by(name='wait').first()
 
                 if data.get('state') == 'stopped':
-                    service.command = session.query(Command).filter_by(name='wait').first()
+                    service.command = session.query(Command).filter_by(name='diag').first()
 
                 if data.get('state') == 'not_stopped':
                     print('<network> Ошибка остановки сервиса. error = ', data.get('error'))
+                    service.command = session.query(Command).filter_by(name='diag').first()
 
                 if data.get('state') == 'error_work':
                     print('<network> Ошибка остановки сервиса. error = ', data.get('error'))
-
-                if data.get('state') == 'ready_diag':
-                    service.command = session.query(Command).filter_by(name='diag').first()
 
                 if data.get('state') == 'error_diag':
                     service.command = session.query(Command).filter_by(name='wait').first()
@@ -455,6 +456,27 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
                 dir_name=self.headers.get('dir_name')).first()
 
             service.config = data.get('config')
+
+            try:
+                session.add(service)
+                session.commit()
+            except Exception as error:
+                print(error)
+                self.send_response(HTTPStatus.INTERNAL_SERVER_ERROR)
+                self.end_headers()
+                return
+            self.send_response(HTTPStatus.ACCEPTED)
+            self.end_headers()
+            return
+
+        if '{api}/service/log'.format(api=API_VERSION) == self.path:
+            service = session.query(Service).filter_by(ip=request_ip).filter_by(
+                dir_name=self.headers.get('dir_name')).first()
+            data_log = 'Console log {data}\n'.format(data=datetime.now())
+
+            data_log = data_log + data.get('log', 'empty(')
+
+            service.log = data_log
 
             try:
                 session.add(service)
@@ -663,12 +685,10 @@ class ControlStatusModel(QThread):
         # online = self.session.query(State).filter_by(name='online').first()
         services = self.session.query(Service).all()
         for service in services:
-            tdelta = datetime.now()-service.timestamp
+            tdelta = datetime.now() - service.timestamp
             seconds = tdelta.total_seconds()
             if seconds > 3:
                 service.state = offline
-            # else:
-            #     service.state = online
             self.session.add(service)
             self.change_state.emit(service)
         self.session.commit()
