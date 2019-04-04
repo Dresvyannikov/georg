@@ -412,7 +412,7 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
                     print('<network> Ошибка запуска сервиса. error = ', data.get('error'))
                     service.command = session.query(Command).filter_by(name='wait').first()
 
-                if data.get('starting') == 'not_started':
+                if data.get('state') == 'starting':
                     service.command = session.query(Command).filter_by(name='wait').first()
 
                 if data.get('state') == 'stopped':
