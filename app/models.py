@@ -301,44 +301,35 @@ class ListDataCube(QAbstractListModel):
             arg = json_data.get('arg_' + str(i), '')
 
             abs_file_path = json_data.get('file_' + str(i), '')
+            # очистка строки
             valid_path = re.compile('^file://')
             if valid_path.findall(abs_file_path):
                 abs_file_path = abs_file_path[7:]
 
-            file_path = os.path.dirname(abs_file_path)
-            file_name = os.path.basename(abs_file_path)
-
+            # находим файл
             file = None
             for file_ in verbose.files:
                 if file_.index == i:
                     file = file_
                     break
 
-            if abs_file_path is '' or not os.path.isfile(abs_file_path):
-                if file:
-                    file.clear()
-                elif arg != '' or abs_file_path != '':
-                    file = File()
-                    file.arg = arg
-                    file.name = abs_file_path
-                    file.verbose_id = verbose.id
-                    file.index = i
-                    file.path = ''
-                    self.session.add(file)
-                    self.session.commit()
-                continue
-
-            if not file:
-                file = File()
-                file.add(file_name, file_path)
-                file.arg = arg
-                file.verbose_id = verbose.id
-                file.index = i
+            # очищаем
+            if file:
+                file.clear()
             else:
+                file = File()
+
+            if os.path.isfile(abs_file_path):
+                file_path = os.path.dirname(abs_file_path)
+                file_name = os.path.basename(abs_file_path)
                 file.add(file_name, file_path)
-                file.arg = arg
-                file.verbose_id = verbose.id
-                file.index = i
+            else:
+                file.name = abs_file_path
+
+            file.arg = arg
+            file.index = i
+            file.verbose_id = verbose.id
+
             self.session.add(file)
             self.session.commit()
 

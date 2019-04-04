@@ -74,7 +74,7 @@ class DefaultConfig(Base):
     service_id = Column(Integer, ForeignKey('service.id'))
 
     def __repr__(self):
-        return "<default_config>"
+        return "<default_config> active=", self.active
 
 
 class State(Base):
@@ -168,12 +168,12 @@ class File(Base):
     __tablename__ = 'file'
     id = Column(Integer, primary_key=True)
     index = Column(Integer, index=True)
-    name = Column(String(32), index=True)
-    path = Column(String(32), index=True)
+    name = Column(String(32), index=True, default='')
+    path = Column(String(32), index=True, default='')
     type = Column(String(32), index=True)
     size = Column(String(32), index=True)
     md5sum = Column(String(32), index=True)
-    arg = Column(String(32), index=True)
+    arg = Column(String(32), index=True, default='')
     active = Column(Boolean, index=True)
     work_id = Column(Integer, ForeignKey('work.id'))
     verbose_id = Column(Integer, ForeignKey('verbose.id'))
