@@ -76,7 +76,6 @@ ApplicationWindow {
                 onClicked: {
                     main_window.connection_thread_stop()
                     settingsWindow.show()
-                    root.hide()
                 }
             }
 
@@ -307,6 +306,25 @@ ApplicationWindow {
         }
     }
 
+    Log{
+        id: logWindow
+        title: qsTr("Logs")
+        color: root.color
+
+        onSignalExit: {
+            logWindow.hide()     // Закрываем первое окно
+        }
+    }
+
+    Config{
+        id:configWindow
+        title: qsTr("Config")
+        color: root.color
+
+        onSignalExit: {
+            configWindow.hide()     // Закрываем первое окно
+        }
+    }
 
         Connections {
             target: list_data_mode

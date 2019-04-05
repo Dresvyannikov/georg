@@ -55,10 +55,6 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.path = 'source/js/jquery.min.js'
             return SimpleHTTPRequestHandler.do_GET(self)
 
-        if 'test' in self.path:
-            self.path = 'test.html'
-            return SimpleHTTPRequestHandler.do_GET(self)
-
         if 'index' in self.path:
             self.get_services()
             return
@@ -106,13 +102,16 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
             if service.command.name == 'start':
                 mode = session.query(Mode).filter_by(active=True).first()
                 if not mode:
-                    data['command'] = 'not_start'
+                    # TODO: костыль
+                    print('Ошибка выбора активного режима')
+                    data['command'] = 'wait'
                     self.wfile.write(simplejson.dumps(data).encode())
                     return
-
                 default_config = session.query(DefaultConfig).filter_by(service_id=service.id).filter_by(mode_id=mode.id).first()
                 if not default_config:
-                    data['command'] = 'not_start'
+                    # TODO: костыль
+                    print('Ошибка выбора настроек запуска, их нет(')
+                    data['command'] = 'wait'
                     self.wfile.write(simplejson.dumps(data).encode())
                     return
                 elif default_config.active:
@@ -126,9 +125,10 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
                         data[key_arg] = row.arg
                         key_comf = COMF.format(index=row.index+1)  # +1 т.к. в конфиге индексы с 1
                         data[key_comf] = row.name
-
                 else:
-                    data['command'] = 'not_start'
+                    # TODO: костыль
+                    print("Ошибка, нет активных конфигов")
+                    data['command'] = 'wait'
 
             self.wfile.write(simplejson.dumps(data).encode())
             return
@@ -147,7 +147,6 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
 
             self.send_response(HTTPStatus.ACCEPTED)
             self.end_headers()
-            print('service.defaults', service.defaults)
             tmp = "/tmp"
 
             if service.defaults:
@@ -159,7 +158,8 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
                     mode_path = os.path.join(dir_archiving, config.mode.name)
                     os.mkdir(mode_path)
                     for file in config.verbose.files:
-                        copyfile(os.path.join(file.path, file.name), os.path.join(mode_path, file.name))
+                        if os.path.isfile(os.path.join(file.path, file.name)):
+                            copyfile(os.path.join(file.path, file.name), os.path.join(mode_path, file.name))
                 archive_name = make_archive(service.name, "tar", root_dir=dir_archiving)
                 archive_path = os.path.abspath(archive_name)
                 md5sum = utils.md5(archive_path)
@@ -410,18 +410,20 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
 
                 if data.get('state') == 'not_started':
                     print('<network> Ошибка запуска сервиса. error = ', data.get('error'))
+                    service.command = session.query(Command).filter_by(name='wait').first()
+
+                if data.get('state') == 'starting':
+                    service.command = session.query(Command).filter_by(name='wait').first()
 
                 if data.get('state') == 'stopped':
-                    service.command = session.query(Command).filter_by(name='wait').first()
+                    service.command = session.query(Command).filter_by(name='diag').first()
 
                 if data.get('state') == 'not_stopped':
                     print('<network> Ошибка остановки сервиса. error = ', data.get('error'))
+                    service.command = session.query(Command).filter_by(name='diag').first()
 
                 if data.get('state') == 'error_work':
                     print('<network> Ошибка остановки сервиса. error = ', data.get('error'))
-
-                if data.get('state') == 'ready_diag':
-                    service.command = session.query(Command).filter_by(name='diag').first()
 
                 if data.get('state') == 'error_diag':
                     service.command = session.query(Command).filter_by(name='wait').first()
@@ -454,6 +456,27 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
                 dir_name=self.headers.get('dir_name')).first()
 
             service.config = data.get('config')
+
+            try:
+                session.add(service)
+                session.commit()
+            except Exception as error:
+                print(error)
+                self.send_response(HTTPStatus.INTERNAL_SERVER_ERROR)
+                self.end_headers()
+                return
+            self.send_response(HTTPStatus.ACCEPTED)
+            self.end_headers()
+            return
+
+        if '{api}/service/log'.format(api=API_VERSION) == self.path:
+            service = session.query(Service).filter_by(ip=request_ip).filter_by(
+                dir_name=self.headers.get('dir_name')).first()
+            data_log = 'Console log {data}\n'.format(data=datetime.now())
+
+            data_log = data_log + data.get('log', 'empty(')
+
+            service.log = data_log
 
             try:
                 session.add(service)
@@ -662,12 +685,10 @@ class ControlStatusModel(QThread):
         # online = self.session.query(State).filter_by(name='online').first()
         services = self.session.query(Service).all()
         for service in services:
-            tdelta = datetime.now()-service.timestamp
+            tdelta = datetime.now() - service.timestamp
             seconds = tdelta.total_seconds()
             if seconds > 3:
                 service.state = offline
-            # else:
-            #     service.state = online
             self.session.add(service)
             self.change_state.emit(service)
         self.session.commit()

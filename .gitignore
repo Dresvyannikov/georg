@@ -1,0 +1,7 @@
+*.tar
+base/*.db
+base/*.png
+venv
+__pycache__
+.idea
+*.qmlc

@@ -43,6 +43,7 @@ class DataCube(object):
         self._state_text = ''
         self.files = {}
         self.rows = 0
+        self._log = ''
 
     def get_config_parse(self):
         config = configparser.ConfigParser()
@@ -90,6 +91,9 @@ class DataCube(object):
     def state_text(self):
         return self._state_text
 
+    def log(self):
+        return self._log
+
 
 class ListDataCube(QAbstractListModel):
     LabelRole = Qt.UserRole + 1
@@ -98,13 +102,15 @@ class ListDataCube(QAbstractListModel):
     CheckedRole = Qt.UserRole + 4
     ConfigRole = Qt.UserRole + 5
     StateText = Qt.UserRole + 6
+    LogsText = Qt.UserRole + 7
 
     _roles = {LabelRole: b"label",
               ColorStateRole: b"color_state",
               ColorFoneRole: b"color_fone",
               CheckedRole: b"checked",
               ConfigRole: b"config",
-              StateText: b"state_text",}
+              StateText: b"state_text",
+              LogsText: b"log",}
     session = None
     list_data_config = {}
 
@@ -144,6 +150,9 @@ class ListDataCube(QAbstractListModel):
 
         if role == self.StateText:
             return data.state_text()
+
+        if role == self.LogsText:
+            return data.log()
 
         return QVariant()
 
@@ -190,6 +199,7 @@ class ListDataCube(QAbstractListModel):
                 self._datas[i]._color_state = service.state.color
                 self._datas[i].set_config(service.config)
                 self._datas[i]._state_text = service.state.name
+                self._datas[i]._log = service.log
 
         # сигнал окончания изменения данных
         self.endResetModel()
@@ -291,44 +301,35 @@ class ListDataCube(QAbstractListModel):
             arg = json_data.get('arg_' + str(i), '')
 
             abs_file_path = json_data.get('file_' + str(i), '')
+            # очистка строки
             valid_path = re.compile('^file://')
             if valid_path.findall(abs_file_path):
                 abs_file_path = abs_file_path[7:]
 
-            file_path = os.path.dirname(abs_file_path)
-            file_name = os.path.basename(abs_file_path)
-
+            # находим файл
             file = None
             for file_ in verbose.files:
                 if file_.index == i:
                     file = file_
                     break
 
-            if abs_file_path is '' or not os.path.isfile(abs_file_path):
-                if file:
-                    file.clear()
-                elif arg != '' or abs_file_path != '':
-                    file = File()
-                    file.arg = arg
-                    file.name = abs_file_path
-                    file.verbose_id = verbose.id
-                    file.index = i
-                    file.path = ''
-                    self.session.add(file)
-                    self.session.commit()
-                continue
-
-            if not file:
-                file = File()
-                file.add(file_name, file_path)
-                file.arg = arg
-                file.verbose_id = verbose.id
-                file.index = i
+            # очищаем
+            if file:
+                file.clear()
             else:
+                file = File()
+
+            if os.path.isfile(abs_file_path):
+                file_path = os.path.dirname(abs_file_path)
+                file_name = os.path.basename(abs_file_path)
                 file.add(file_name, file_path)
-                file.arg = arg
-                file.verbose_id = verbose.id
-                file.index = i
+            else:
+                file.name = abs_file_path
+
+            file.arg = arg
+            file.index = i
+            file.verbose_id = verbose.id
+
             self.session.add(file)
             self.session.commit()
 
@@ -339,6 +340,12 @@ class ListDataCube(QAbstractListModel):
     def item_data(self, index):
         text = self._datas[index]._config
         data = {'config': text}
+        return data
+
+    @pyqtSlot(int, result='QVariant')
+    def get_logs(self, index):
+        text = self._datas[index]._log
+        data = {'log': text}
         return data
 
     def create_verbose(self):
@@ -515,9 +522,10 @@ class ListDataMode(QAbstractListModel):
 
     @pyqtSlot(str)
     def set_active_mode(self, name):
-        if not name:
-            return
-        mode = self.session.query(Mode).filter_by(name=name).first()
+        if name == '':
+            mode = self.session.query(Mode).filter_by(id=1).first()
+        else:
+            mode = self.session.query(Mode).filter_by(name=name).first()
         mode.active = True
         self.session.add(mode)
         self.session.commit()

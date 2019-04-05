@@ -32,12 +32,18 @@ from base.models import Command
 from base.models import Mode
 from base.models import Operator
 
+if len(sys.argv) < 2:
+    print('Укажите порт при запуске программы: run.py port')
+    exit()
+
+port = int(sys.argv[1])
+
 
 def make_connection(signal, fun):
     signal.connect(fun)
 
 
-sql_engine = create_engine('sqlite:///' + os.path.dirname(sys.argv[0]) + '/base/app.db?check_same_thread=False',
+sql_engine = create_engine('sqlite:///' + os.path.dirname(os.path.abspath(sys.argv[0])) + '/base/app.db?check_same_thread=False',
                            echo=False)
 Base.metadata.create_all(sql_engine)
 Session = session_factory = sessionmaker(bind=sql_engine)
@@ -57,7 +63,6 @@ if not session.query(State).all():
     not_stopped = State(name='not_stopped', color="red")
     error_work = State(name='error_work', color="red")
     error_diag = State(name='error_diag', color="red")
-    ready_diag = State(name='ready_diag', color="#9cdb8c")
     sended_diag = State(name='sended_diag', color="#9cdb8c")
     sended_config = State(name='sended_config', color="#9cdb8c")
     error_config = State(name='error_config', color="red")
@@ -66,11 +71,12 @@ if not session.query(State).all():
     updated = State(name='updated', color='#9cdb8c')
     not_updated = State(name='not_updated', color='yellow')
     error_update = State(name='error_update', color="red")
-    not_found_file = State(name='not_found_file', color="red")
+    not_found_file = State(name='not_found_file', color="yellow")
+    starting = State(name='starting', color="yellow")
 
     session.add_all([offline_state, online_state, error_state, launched, started, not_started, stopped, not_stopped,
-                     error_work, error_diag, ready_diag, sended_diag, sended_config, error_config, config_set,
-                     error_set_config, updated, not_updated,  error_update, not_found_file])
+                     error_work, error_diag, sended_diag, sended_config, error_config, config_set,
+                     error_set_config, updated, not_updated,  error_update, not_found_file, starting])
     session.commit()
 
 if not session.query(Command).all():
@@ -94,6 +100,11 @@ if not session.query(Operator).all():
     session.add(admin)
     session.commit()
 
+if not session.query(Mode).all():
+    mode_test = Mode('test')
+    mode_test.active = True
+    session.add(mode_test)
+    session.commit()
 
 QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
 app = QGuiApplication(sys.argv)
@@ -120,7 +131,7 @@ ctx.setContextProperty("list_data_user", list_data_user)
 engine.load(QUrl.fromLocalFile("view/main.qml"))
 
 handler = QuietSimpleHTTPRequestHandler
-with ThreadedHTTPServer("localhost", 8000, request_handler=handler) as main_window.server:
+with ThreadedHTTPServer("0.0.0.0", port, request_handler=handler) as main_window.server:
     # поток проверки БД на обновление
     updater = UpdaterModel()
     main_window.updater_thread = updater

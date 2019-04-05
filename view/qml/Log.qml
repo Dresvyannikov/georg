@@ -6,34 +6,34 @@ import QtQuick.Controls.Styles 1.4
 import QtQuick.Dialogs 1.0
 
 ApplicationWindow{
-    id: configWindow
+    id: logWindow
     width:640
     height:480
     flags: Qt.Window | Qt.WindowCancelButtonHint
     signal signalExit
 
-    function change_config(index){
-        var text_config;
-        text_config = list_data_cube.item_data(index-1)
-        configArea.text = text_config.config
+    function change_cube(index){
+        var data_cube;
+        data_cube = list_data_cube.get_logs(index)
+        logsArea.text = data_cube.log
     }
 
     TextArea{
-        id: configArea
+        id: logsArea
         readOnly: true
         anchors.left: parent.left
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 40
         width: parent.width
-        text: model.config
+        text: 'adadadda'
     }
 
     SingleButton{
-        anchors.top: configArea.bottom
+        anchors.top: logsArea.bottom
         anchors.topMargin: 10
         anchors.horizontalCenter: parent.horizontalCenter
         label: 'Закрыть'
-        onClicked: configWindow.signalExit()
+        onClicked: logWindow.signalExit() // Вызываем сигнал
     }
 }

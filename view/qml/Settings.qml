@@ -36,6 +36,7 @@ ApplicationWindow{
             status_text.text = 'Сохранение настроек...'
             // сохранение списка всех режимов
             list_data_mode.save_db()
+            list_data_mode.set_active_mode('')
 
             // сохраняем параметры имитаторов по вкладкам
             var tab_index, tab;
@@ -69,8 +70,10 @@ ApplicationWindow{
 //                  console.log('mode_name', column.data[0].text)
                     list_data_cube.set_data_config(tab_index, column.data[0].text, j_data, checkbox.checked)
                     list_view.incrementCurrentIndex() // инкремент индекса
+
                 }
             }
+
             status_text.text = 'Сохранено'
         }
     }
@@ -155,13 +158,8 @@ ApplicationWindow{
                             label: qsTr("config")
 
                             onClicked: {
-                                var component = Qt.createComponent('Config.qml')
-                                var window = component.createObject(root)
-                                window.closing.connect(function(){window.close.accepted = false})
-                                window.show()
-                                window.change_config(tabview_settings.currentIndex)
-//                            config_window.show()
-//                            config_window.change_config(tabview_settings.currentIndex)
+                                configWindow.change_config(tabview_settings.currentIndex)
+                                configWindow.show()
                             }
                         }
 
@@ -283,11 +281,5 @@ ApplicationWindow{
             //                  frame: Rectangle { color: "steelblue" }
         }
 
-    }
-
-    Config{
-        id:config_window
-        title: qsTr("Config")
-        color: root.color
     }
 }
