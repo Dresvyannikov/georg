@@ -147,7 +147,6 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
 
             self.send_response(HTTPStatus.ACCEPTED)
             self.end_headers()
-            print('service.defaults', service.defaults)
             tmp = "/tmp"
 
             if service.defaults:
@@ -159,7 +158,8 @@ class QuietSimpleHTTPRequestHandler(SimpleHTTPRequestHandler):
                     mode_path = os.path.join(dir_archiving, config.mode.name)
                     os.mkdir(mode_path)
                     for file in config.verbose.files:
-                        copyfile(os.path.join(file.path, file.name), os.path.join(mode_path, file.name))
+                        if os.path.isfile(os.path.join(file.path, file.name)):
+                            copyfile(os.path.join(file.path, file.name), os.path.join(mode_path, file.name))
                 archive_name = make_archive(service.name, "tar", root_dir=dir_archiving)
                 archive_path = os.path.abspath(archive_name)
                 md5sum = utils.md5(archive_path)
